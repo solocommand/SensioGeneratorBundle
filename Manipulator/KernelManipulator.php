@@ -35,6 +35,85 @@ class KernelManipulator extends Manipulator
     }
 
     /**
+     * Writes new bundle(s) to AppKernel
+     * 
+     * @param array $lines Lines to write
+     *
+     * @return boolean true if write was successful, false otherwise.
+     */
+    private function writeAppKernel($src, $bundles)
+    {
+
+        $method = $this->reflected->getMethod('registerBundles');
+        $lines = array_slice($src, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1);
+
+        $this->setCode(token_get_all('<?php '.implode('', $lines)), $method->getStartLine());
+        while ($token = $this->next()) {
+            // $bundles
+            if (T_VARIABLE !== $token[0] || '$bundles' !== $token[1]) {
+                continue;
+            }
+
+            // =
+            $this->next();
+
+            // array
+            $token = $this->next();
+            if (T_ARRAY !== $token[0]) {
+                return false;
+            }
+
+            // add the bundle at the end of the array
+            while ($token = $this->next()) {
+                // look for );
+                if (')' !== $this->value($token)) {
+                    continue;
+                }
+
+                if (';' !== $this->value($this->peek())) {
+                    continue;
+                }
+
+                // ;
+                $this->next();
+
+                $lines = array_merge(
+                    array_slice($src, 0, $this->line - 2),
+                    // Appends a separator comma to the current last position of the array
+                    array(rtrim(rtrim($src[$this->line - 2]), ',') . ",\n"),
+                    array($bundles),
+                    array_slice($src, $this->line - 1)
+                );
+
+                file_put_contents($this->reflected->getFilename(), implode('', $lines));
+
+                return true;
+            }
+        }
+
+    }
+
+    /**
+     * isBundleDefined
+     * 
+     * @param array  $src    ource file to check
+     * @param string $bundle Bundle to check for
+     *
+     * @return boolean Is the bundle already defined?
+     */
+    private function isBundleDefined($src, $bundle)
+    {
+
+        $method = $this->reflected->getMethod('registerBundles');
+        $lines = array_slice($src, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1);
+
+        return (bool) false !== strpos(implode('', $lines), $bundle);
+
+
+
+    }
+
+    /**
      * Adds a bundle at the end of the existing ones.
      *
      * @param string $bundle The bundle class name
@@ -50,63 +129,20 @@ class KernelManipulator extends Manipulator
         }
 
         $src = file($this->reflected->getFilename());
-        $method = $this->reflected->getMethod('registerBundles');
-        $lines = array_slice($src, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1);
 
         // Don't add same bundle twice
-        if (false !== strpos(implode('', $lines), $bundle)) {
+        if ($this->isBundleDefined($src, $bundle)) {
             throw new \RuntimeException(sprintf('Bundle "%s" is already defined in "AppKernel::registerBundles()".', $bundle));
         }
 
-        $this->setCode(token_get_all('<?php '.implode('', $lines)), $method->getStartLine());
-        while ($token = $this->next()) {
-            // $bundles
-            if (T_VARIABLE !== $token[0] || '$bundles' !== $token[1]) {
-                continue;
-            }
+        $bundleLoader = sprintf("            new %s(),\n", $bundle);
 
-            // =
-            $this->next();
+        return $this->writeAppKernel($src, $bundleLoader);
 
-            // array
-            $token = $this->next();
-            if (T_ARRAY !== $token[0]) {
-                return false;
-            }
-
-            // add the bundle at the end of the array
-            while ($token = $this->next()) {
-                // look for );
-                if (')' !== $this->value($token)) {
-                    continue;
-                }
-
-                if (';' !== $this->value($this->peek())) {
-                    continue;
-                }
-
-                // ;
-                $this->next();
-
-                $lines = array_merge(
-                    array_slice($src, 0, $this->line - 2),
-                    // Appends a separator comma to the current last position of the array
-                    array(rtrim(rtrim($src[$this->line - 2]), ',') . ",\n"),
-                    array(sprintf("            new %s(),\n", $bundle)),
-                    array_slice($src, $this->line - 1)
-                );
-
-                file_put_contents($this->reflected->getFilename(), implode('', $lines));
-
-                return true;
-            }
-        }
     }
 
     /**
      * Adds multiple bundles at the end of the existing ones.
-     * Due to Manipulator using the ReflectionObject, changes to the source of a
-     * file are not reflected if addBundle is used within a loop.
      *
      * @param array $bundle The bundle class names to add
      *
@@ -114,75 +150,30 @@ class KernelManipulator extends Manipulator
      *
      * @throws \RuntimeException If bundle is already defined
      */
-    public function addBundles($bundles = array())
+    public function addBundles($bundles = array(), $bundleLoader = "")
     {
         if (!$this->reflected->getFilename()) {
             return false;
         }
 
         $src = file($this->reflected->getFilename());
-        $method = $this->reflected->getMethod('registerBundles');
-        $lines = array_slice($src, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1);
-
-        $bundleSrc = "";
 
         // Don't add same bundle twice
         foreach ($bundles as $bundle) {
 
-            if (false !== strpos(implode('', $lines), $bundle)) {
-                continue;
+            if (!$this->isBundleDefined($src, $bundle)) {
+
+                $bundleLoader .= sprintf("            new %s(),\n", $bundle);
+
             }
-
-            $bundleSrc .= sprintf("            new %s(),\n", $bundle);
-
+                
         }
 
-        if ("" == $bundleSrc) {
+        if ("" == $bundleLoader) {
             throw new \RuntimeException('All bundles already defined in "AppKernel::registerBundles()".');
         }
 
-        $this->setCode(token_get_all('<?php '.implode('', $lines)), $method->getStartLine());
-        while ($token = $this->next()) {
-            // $bundles
-            if (T_VARIABLE !== $token[0] || '$bundles' !== $token[1]) {
-                continue;
-            }
+        return $this->writeAppKernel($src, $bundleLoader);
 
-            // =
-            $this->next();
-
-            // array
-            $token = $this->next();
-            if (T_ARRAY !== $token[0]) {
-                return false;
-            }
-
-            // add the bundle at the end of the array
-            while ($token = $this->next()) {
-                // look for );
-                if (')' !== $this->value($token)) {
-                    continue;
-                }
-
-                if (';' !== $this->value($this->peek())) {
-                    continue;
-                }
-
-                // ;
-                $this->next();
-
-                $lines = array_merge(
-                    array_slice($src, 0, $this->line - 2),
-                    // Appends a separator comma to the current last position of the array
-                    array(rtrim(rtrim($src[$this->line - 2]), ',') . ",\n"),
-                    array($bundleSrc),
-                    array_slice($src, $this->line - 1)
-                );
-
-                file_put_contents($this->reflected->getFilename(), implode('', $lines));
-
-                return true;
-            }
-        }
     }
 }
