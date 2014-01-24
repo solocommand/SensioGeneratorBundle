@@ -36,7 +36,7 @@ class KernelManipulator extends Manipulator
 
     /**
      * Writes new bundle(s) to AppKernel
-     * 
+     *
      * @param array $lines Lines to write
      *
      * @return boolean true if write was successful, false otherwise.
@@ -95,7 +95,7 @@ class KernelManipulator extends Manipulator
 
     /**
      * isBundleDefined
-     * 
+     *
      * @param array  $src    ource file to check
      * @param string $bundle Bundle to check for
      *
@@ -108,8 +108,6 @@ class KernelManipulator extends Manipulator
         $lines = array_slice($src, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1);
 
         return (bool) false !== strpos(implode('', $lines), $bundle);
-
-
 
     }
 
@@ -166,7 +164,7 @@ class KernelManipulator extends Manipulator
                 $bundleLoader .= sprintf("            new %s(),\n", $bundle);
 
             }
-                
+
         }
 
         if ("" == $bundleLoader) {
