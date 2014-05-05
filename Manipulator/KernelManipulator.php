@@ -39,7 +39,7 @@ class KernelManipulator extends Manipulator
      *
      * @param array $lines Lines to write
      *
-     * @return boolean true if write was successful, false otherwise.
+     * @return bool    true if write was successful, false otherwise.
      */
     private function writeAppKernel($src, $bundles)
     {
@@ -99,7 +99,7 @@ class KernelManipulator extends Manipulator
      * @param array  $src    ource file to check
      * @param string $bundle Bundle to check for
      *
-     * @return boolean Is the bundle already defined?
+     * @return bool    Is the bundle already defined?
      */
     private function isBundleDefined($src, $bundle)
     {
@@ -116,7 +116,7 @@ class KernelManipulator extends Manipulator
      *
      * @param string $bundle The bundle class name
      *
-     * @return Boolean true if it worked, false otherwise
+     * @return bool    true if it worked, false otherwise
      *
      * @throws \RuntimeException If bundle is already defined
      */
@@ -144,7 +144,7 @@ class KernelManipulator extends Manipulator
      *
      * @param array $bundle The bundle class names to add
      *
-     * @return Boolean true if it worked, false otherwise
+     * @return bool    true if it worked, false otherwise
      *
      * @throws \RuntimeException If bundle is already defined
      */
