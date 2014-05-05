@@ -35,28 +35,17 @@ class KernelManipulator extends Manipulator
     }
 
     /**
-     * Adds a bundle at the end of the existing ones.
+     * Writes new bundle(s) to AppKernel
      *
-     * @param string $bundle The bundle class name
+     * @param array $lines Lines to write
      *
-     * @return Boolean true if it worked, false otherwise
-     *
-     * @throws \RuntimeException If bundle is already defined
+     * @return boolean true if write was successful, false otherwise.
      */
-    public function addBundle($bundle)
+    private function writeAppKernel($src, $bundles)
     {
-        if (!$this->reflected->getFilename()) {
-            return false;
-        }
 
-        $src = file($this->reflected->getFilename());
         $method = $this->reflected->getMethod('registerBundles');
         $lines = array_slice($src, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1);
-
-        // Don't add same bundle twice
-        if (false !== strpos(implode('', $lines), $bundle)) {
-            throw new \RuntimeException(sprintf('Bundle "%s" is already defined in "AppKernel::registerBundles()".', $bundle));
-        }
 
         $this->setCode(token_get_all('<?php '.implode('', $lines)), $method->getStartLine());
         while ($token = $this->next()) {
@@ -92,7 +81,7 @@ class KernelManipulator extends Manipulator
                     array_slice($src, 0, $this->line - 2),
                     // Appends a separator comma to the current last position of the array
                     array(rtrim(rtrim($src[$this->line - 2]), ',') . ",\n"),
-                    array(sprintf("            new %s(),\n", $bundle)),
+                    array($bundles),
                     array_slice($src, $this->line - 1)
                 );
 
@@ -101,5 +90,88 @@ class KernelManipulator extends Manipulator
                 return true;
             }
         }
+
+    }
+
+    /**
+     * isBundleDefined
+     *
+     * @param array  $src    ource file to check
+     * @param string $bundle Bundle to check for
+     *
+     * @return boolean Is the bundle already defined?
+     */
+    private function isBundleDefined($src, $bundle)
+    {
+
+        $method = $this->reflected->getMethod('registerBundles');
+        $lines = array_slice($src, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1);
+
+        return (bool) false !== strpos(implode('', $lines), $bundle);
+
+    }
+
+    /**
+     * Adds a bundle at the end of the existing ones.
+     *
+     * @param string $bundle The bundle class name
+     *
+     * @return Boolean true if it worked, false otherwise
+     *
+     * @throws \RuntimeException If bundle is already defined
+     */
+    public function addBundle($bundle)
+    {
+        if (!$this->reflected->getFilename()) {
+            return false;
+        }
+
+        $src = file($this->reflected->getFilename());
+
+        // Don't add same bundle twice
+        if ($this->isBundleDefined($src, $bundle)) {
+            throw new \RuntimeException(sprintf('Bundle "%s" is already defined in "AppKernel::registerBundles()".', $bundle));
+        }
+
+        $bundleLoader = sprintf("            new %s(),\n", $bundle);
+
+        return $this->writeAppKernel($src, $bundleLoader);
+
+    }
+
+    /**
+     * Adds multiple bundles at the end of the existing ones.
+     *
+     * @param array $bundle The bundle class names to add
+     *
+     * @return Boolean true if it worked, false otherwise
+     *
+     * @throws \RuntimeException If bundle is already defined
+     */
+    public function addBundles($bundles = array(), $bundleLoader = "")
+    {
+        if (!$this->reflected->getFilename()) {
+            return false;
+        }
+
+        $src = file($this->reflected->getFilename());
+
+        // Don't add same bundle twice
+        foreach ($bundles as $bundle) {
+
+            if (!$this->isBundleDefined($src, $bundle)) {
+
+                $bundleLoader .= sprintf("            new %s(),\n", $bundle);
+
+            }
+
+        }
+
+        if ("" == $bundleLoader) {
+            throw new \RuntimeException('All bundles already defined in "AppKernel::registerBundles()".');
+        }
+
+        return $this->writeAppKernel($src, $bundleLoader);
+
     }
 }
