@@ -148,13 +148,15 @@ class KernelManipulator extends Manipulator
      *
      * @throws \RuntimeException If bundle is already defined
      */
-    public function addBundles($bundles = array(), $bundleLoader = "")
+    public function addBundles(array $bundles = array())
     {
         if (!$this->reflected->getFilename()) {
             return false;
         }
 
         $src = file($this->reflected->getFilename());
+
+        $bundleLoader = '';
 
         // Don't add same bundle twice
         foreach ($bundles as $bundle) {
@@ -167,7 +169,7 @@ class KernelManipulator extends Manipulator
 
         }
 
-        if ("" == $bundleLoader) {
+        if ('' == $bundleLoader) {
             throw new \RuntimeException('All bundles already defined in "AppKernel::registerBundles()".');
         }
 
